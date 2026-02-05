@@ -1,43 +1,31 @@
 import dotenv from "dotenv";
-import pkg from "pg";
 import fs from "fs";
+import pool from "./src/db.js";
 
+// Load environment earlier (db.js also loads it) but keep here for safety
 dotenv.config();
-const { Pool } = pkg;
 
-const pool = new Pool({
-  user: "postgres",          // your Postgres username
-  password: "Farouk61@",  // your Postgres password
-  host: "localhost",       // your DB host
-  port: 5432,              // default Postgres port
-  database: "smart_parking",  // your database name
-});
-
-async function setupDatabase() {
+export async function setupDatabase() {
   try {
     console.log("🔧 Setting up database...");
-    
-    // Read and execute the SQL setup file
+
     const sql = fs.readFileSync("database-setup.sql", "utf8");
     await pool.query(sql);
-    
+
     console.log("✅ Database setup completed successfully!");
-    console.log("📊 Tables created:");
-    console.log("   - users");
-    console.log("   - parking_lots");
-    console.log("   - parking_slots (25 slots added)");
-    console.log("   - detection_logs");
-    
+
     // Test the connection
     const result = await pool.query("SELECT COUNT(*) as slot_count FROM parking_slots");
     console.log(`🅿️  Parking slots in database: ${result.rows[0].slot_count}`);
-    
   } catch (error) {
-    console.error("❌ Database setup failed:", error.message);
-    process.exit(1);
-  } finally {
-    await pool.end();
+    // Log full error for easier debugging in remote environments
+    console.error("❌ Database setup failed:", error && error.message ? error.message : error);
+    // Don't call process.exit here — let the caller decide how to handle failures.
+    throw error;
   }
 }
 
-setupDatabase();
+// Only run automatically when explicitly requested via env var
+if (process.env.RUN_DB_SETUP === "true") {
+  setupDatabase().catch(() => {});
+}
