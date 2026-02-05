@@ -76,7 +76,16 @@ export const processFile = async (req, res) => {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
-    const parkingLotId = parseInt(req.query.parkingLotId) || 1;
+    // Extract parking_id from form body or query parameter and parse as integer
+    const parking_id = req.body.parking_id || req.query.parking_id;
+    const parking_id_int = parking_id ? parseInt(parking_id, 10) : null;
+
+    // Prefer `parking_id` from the request body when provided; otherwise fall back
+    // to `parkingLotId` query parameter, then default to 1.
+    const parkingLotId = (parking_id_int && !isNaN(parking_id_int))
+      ? parking_id_int
+      : (parseInt(req.query.parkingLotId, 10) || 1);
+
     const parkingBoxes = await loadParkingBoxesFromDB(parkingLotId);
 
     // Read original image
@@ -189,6 +198,19 @@ export const processFile = async (req, res) => {
       .filter((s) => !occupiedList.includes(s))
       .sort((a, b) => parseInt(a) - parseInt(b));
 
+    // Store results in parking_detection_results table if parking_id is provided
+    if (parking_id_int && !isNaN(parking_id_int)) {
+      try {
+        await parkingService.saveParkingDetectionResult(
+          parking_id_int,
+          occupiedList,
+          available
+        );
+      } catch (saveError) {
+        console.error("⚠️ Failed to save parking detection result:", saveError);
+      }
+    }
+
     res.json({
       success: true,
       occupied: occupiedList,
@@ -197,6 +219,65 @@ export const processFile = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error in processFile:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+export const getLatestDetectionResult = async (req, res) => {
+  try {
+    const { parking_id } = req.body;
+
+    if (!parking_id) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "parking_id is required in request body" 
+      });
+    }
+
+    const parkingIdInt = parseInt(parking_id, 10);
+    if (isNaN(parkingIdInt)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "parking_id must be a valid integer" 
+      });
+    }
+
+    const parkingService = new ParkingService();
+    
+    // Fetch both detection results and layout
+    const [result, layout] = await Promise.all([
+      parkingService.getLatestParkingDetectionResult(parkingIdInt),
+      parkingService.getParkingLayout(parkingIdInt),
+    ]);
+
+    if (!result) {
+      return res.status(404).json({ 
+        success: false, 
+        error: `No detection results found for parking_id: ${parkingIdInt}` 
+      });
+    }
+
+    // Build response with detection results and layout (if available)
+    const responseData = {
+      id: result.id,
+      parking_id: result.parking_id,
+      occupied_slots: result.occupied_slots,
+      available_slots: result.available_slots,
+      created_at: result.created_at,
+    };
+
+    // Add layout if it exists
+    if (layout) {
+      responseData.layout = layout.layout;
+      responseData.layout_updated_at = layout.updated_at;
+    }
+
+    res.json({
+      success: true,
+      data: responseData,
+    });
+  } catch (error) {
+    console.error("❌ Error in getLatestDetectionResult:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 };

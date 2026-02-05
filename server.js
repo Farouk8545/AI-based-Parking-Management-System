@@ -1,9 +1,10 @@
+import dotenv from "dotenv";
 import app from "./src/app.js"
-import { setupDatabase } from "./setup-database.js";
+import "./setup-database.js";
+dotenv.config();
 
 const PORT = process.env.PORT;
 
-app.listen(PORT, "0.0.0.0", async () => {
+app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  await setupDatabase();
 });
