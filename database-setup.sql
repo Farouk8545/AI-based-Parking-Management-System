@@ -82,6 +82,24 @@ CREATE TABLE IF NOT EXISTS token_blacklist (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Favourite parkings table
+CREATE TABLE IF NOT EXISTS favourite_parkings (
+  id SERIAL PRIMARY KEY,
+  username VARCHAR(255) NOT NULL,
+  parking_id INTEGER NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(username, parking_id)
+);
+
+-- Parking history table
+CREATE TABLE IF NOT EXISTS parking_history (
+  id SERIAL PRIMARY KEY,
+  username VARCHAR(255) NOT NULL,
+  parking_id INTEGER NOT NULL,
+  last_visited TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(username, parking_id)
+);
+
 -- Insert default parking lot
 INSERT INTO parking_lots (id, name, description) 
 VALUES (1, 'Main Parking Lot', 'Default parking lot for the smart garage system')
@@ -129,3 +147,8 @@ CREATE INDEX IF NOT EXISTS idx_parking_detection_results_parking_id ON parking_d
 CREATE INDEX IF NOT EXISTS idx_parking_detection_results_created_at ON parking_detection_results(created_at);
 CREATE INDEX IF NOT EXISTS idx_parking_layouts_parking_id ON parking_layouts(parking_id);
 CREATE INDEX IF NOT EXISTS idx_parking_layouts_created_at ON parking_layouts(created_at);
+CREATE INDEX IF NOT EXISTS idx_favourite_parkings_username ON favourite_parkings(username);
+CREATE INDEX IF NOT EXISTS idx_favourite_parkings_parking_id ON favourite_parkings(parking_id);
+CREATE INDEX IF NOT EXISTS idx_parking_history_username ON parking_history(username);
+CREATE INDEX IF NOT EXISTS idx_parking_history_parking_id ON parking_history(parking_id);
+CREATE INDEX IF NOT EXISTS idx_parking_history_last_visited ON parking_history(last_visited);

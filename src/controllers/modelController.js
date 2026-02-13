@@ -4,6 +4,7 @@ import * as ort from "onnxruntime-node";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import { ParkingService } from "../services/parkingService.js";
+import pool from "../db.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -53,7 +54,7 @@ function doesIntersect(parkingBox, detection) {
   }
 }
 
-async function loadParkingBoxesFromDB(parkingLotId = 1) {
+async function loadParkingBoxesFromDB(parkingLotId) {
   try {
     const parkingService = new ParkingService();
     const slots = await parkingService.getParkingSlots(parkingLotId);
@@ -79,13 +80,8 @@ export const processFile = async (req, res) => {
     // Extract parking_id from form body or query parameter and parse as integer
     const parking_id = req.body.parking_id || req.query.parking_id;
     const parking_id_int = parking_id ? parseInt(parking_id, 10) : null;
-
-    // Prefer `parking_id` from the request body when provided; otherwise fall back
-    // to `parkingLotId` query parameter, then default to 1.
-    const parkingLotId = (parking_id_int && !isNaN(parking_id_int))
-      ? parking_id_int
-      : (parseInt(req.query.parkingLotId, 10) || 1);
-
+    
+    const parkingLotId = parseInt(req.body.parking_id) || parseInt(req.query.parking_id) || 1;;
     const parkingBoxes = await loadParkingBoxesFromDB(parkingLotId);
 
     // Read original image
@@ -270,6 +266,23 @@ export const getLatestDetectionResult = async (req, res) => {
     if (layout) {
       responseData.layout = layout.layout;
       responseData.layout_updated_at = layout.updated_at;
+    }
+
+    // Update parking history for the user
+    if (req.user && req.user.email) {
+      const username = req.user.email;
+      try {
+        await pool.query(
+          `INSERT INTO parking_history (username, parking_id, last_visited)
+           VALUES ($1, $2, CURRENT_TIMESTAMP)
+           ON CONFLICT (username, parking_id)
+           DO UPDATE SET last_visited = CURRENT_TIMESTAMP`,
+          [username, parkingIdInt]
+        );
+      } catch (historyError) {
+        console.error("⚠️ Failed to update parking history:", historyError);
+        // Don't fail the request if history update fails
+      }
     }
 
     res.json({
